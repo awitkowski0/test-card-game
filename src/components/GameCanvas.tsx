@@ -2,8 +2,10 @@ import React, { useState, useEffect } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { PerspectiveCamera, Environment, ContactShadows } from "@react-three/drei";
 import { Board } from "./Board";
+import { Hand } from "./Hand";
 import type { Entity } from "../logic/schema";
 import * as THREE from "three";
+import { world } from "../logic/world";
 
 interface GameCanvasProps {
   entities: Entity[];
@@ -12,14 +14,11 @@ interface GameCanvasProps {
   onSelectCard: (id: string) => void;
 }
 
-import { Hand } from "./Hand";
-
 interface CameraControllerProps {
   view: "sitting" | "standing";
 }
 
 const CameraController = ({ view }: CameraControllerProps) => {
-  // Target positions
   const sittingPos = new THREE.Vector3(0, 2, 3); // Closer and lower
   const standingPos = new THREE.Vector3(0, 4, 0.25); // Closer top-down
 
@@ -37,6 +36,26 @@ export const GameCanvas: React.FC<GameCanvasProps> = (props) => {
   const { entities, playerId, onTileClick} = props;
   const [view, setView] = useState<"sitting" | "standing">("sitting");
 
+  // Sync server state to Miniplex World
+  useEffect(() => {
+      world.clear();
+      
+      entities.forEach(entity => {
+          world.add(entity);
+      });
+  }, [entities]);
+
+  const handlePlayCard = React.useCallback((index: number, location: [number, number]) => {
+      const [x, y] = location;
+
+      world.add({
+          id: `local-entity-${Date.now()}`,
+          owner: playerId,
+          onBoard: { x, y },
+          cardId: `card-${index}`
+      });
+  }, [playerId]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() === "w") setView("standing");
@@ -50,7 +69,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = (props) => {
     <div className="w-full h-screen bg-neutral-900">
       <Canvas shadows>
         <PerspectiveCamera makeDefault position={[0, 3, 4]} fov={65}>
-            {view === "sitting" && <Hand />}
+          <Hand 
+            playerId={playerId} 
+            onPlayCard={handlePlayCard} 
+          />
         </PerspectiveCamera>
         <CameraController view={view} />
         
@@ -60,7 +82,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = (props) => {
         
         <group position={[0, 0, 0]}>
             <Board 
-                entities={entities} 
                 playerId={playerId} 
                 onTileClick={onTileClick} 
             />

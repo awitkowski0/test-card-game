@@ -1,14 +1,15 @@
 import React from "react";
 import { Grid } from "@react-three/drei";
-import type { Entity } from "../logic/schema";
+import { useEntities } from "miniplex-react";
+import { world } from "../logic/world";
 
 interface BoardProps {
-  entities: Entity[];
   playerId: string;
   onTileClick?: (x: number, y: number) => void;
 }
 
-export const Board: React.FC<BoardProps> = ({onTileClick }) => {
+export const Board: React.FC<BoardProps> = ({ playerId, onTileClick }) => {
+  const entities = useEntities(world.with("onBoard"));
   // Render grid tiles for clicking
   const tiles = [];
   for (let x = 0; x < 4; x++) {
@@ -46,6 +47,23 @@ export const Board: React.FC<BoardProps> = ({onTileClick }) => {
       />
       {/* Clickable Tiles */}
       {tiles}
+
+      {/* Render Entities */}
+      {Array.from(entities).map((entity) => {
+        if (!entity.onBoard) return null;
+        const { x, y } = entity.onBoard;
+        
+        // Grid logic: x = gridX - 1.5, z = gridY - 1.5
+        const worldX = x - 1.5;
+        const worldZ = y - 1.475;
+
+        return (
+            <mesh key={entity.id} position={[worldX, 0.02, worldZ]} rotation={[-Math.PI/2, 0, 0]}>
+                <boxGeometry args={[0.6, 0.8, 0.005]} />
+                <meshStandardMaterial color={entity.owner === playerId ? "#3333cc" : "#cc3333"} />
+            </mesh>
+        );
+      })}
     </group>
   );
 };
