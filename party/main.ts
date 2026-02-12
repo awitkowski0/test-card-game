@@ -11,6 +11,8 @@ type GameState = {
 
 export default class Server implements Party.Server {
   gameState: GameState;
+  // Map connection.id -> "p1" | "p2" | "spectator"
+  playerConnections: Record<string, string> = {};
 
   constructor(readonly room: Party.Room) {
     this.gameState = {
@@ -23,12 +25,18 @@ export default class Server implements Party.Server {
 
   onMessage(message: string, sender: Party.Connection) {
     const action = JSON.parse(message) as GameAction;
-    
-    // Very basic validation and state update prototype
-    // In a real game, we'd run the reducer here.
+    const playerId = this.playerConnections[sender.id];
+
+    if (!playerId || playerId === "spectator") return;
+
+    if (this.gameState.activePlayer !== playerId) {
+        return; 
+    }
+
     if (action.type === "END_TURN") {
         this.gameState.activePlayer = this.gameState.activePlayer === "p1" ? "p2" : "p1";
         this.gameState.turn++;
+
         // Draw a card for the active player
         this.drawCard(this.gameState.activePlayer);
         this.broadcastState();
@@ -37,9 +45,25 @@ export default class Server implements Party.Server {
         const cardIndex = this.gameState.entities.findIndex(e => e.id === action.cardInstanceId && e.inHand);
         
         if (cardIndex !== -1) {
-            // Move to board
             const entity = this.gameState.entities[cardIndex];
-            entity.inHand = false;
+
+            if (entity.owner !== playerId) {
+                console.log(`Cheat attempt: ${playerId} tried to move ${entity.owner}'s card`);
+                return;
+            }
+            // P1 must place on y >= 2 (Bottom)
+            // P2 must place on y <= 1 (Top)
+            const isValidPlacement = 
+                (playerId === "p1" && action.y >= 2) ||
+                (playerId === "p2" && action.y <= 1);
+
+            if (!isValidPlacement) {
+                console.log(`Invalid placement by ${playerId} at ${action.y}`);
+                return;
+            }
+
+            // Move to board
+            delete entity.inHand;
             entity.onBoard = { x: action.x, y: action.y };
             entity.targetPosition = [action.x - 1.5, 0.1, action.y - 1.5]; // Update visual pos
             this.broadcastState();
@@ -61,6 +85,24 @@ export default class Server implements Party.Server {
 
             this.broadcastState();
         }
+    } else if (action.type === "RESET_GAME") {
+        this.gameState.entities = [];
+        this.gameState.turn = 1;
+        this.gameState.activePlayer = "p1";
+
+        // Redeal to current players
+        if (this.gameState.players.includes("p1")) {
+            for (let i = 0; i < 5; i++) {
+                this.drawCard("p1");
+            }
+        }
+        if (this.gameState.players.includes("p2")) {
+             for (let i = 0; i < 5; i++) {
+                this.drawCard("p2");
+             }
+        }
+        
+        this.broadcastState();
     }
   }
 
@@ -81,7 +123,50 @@ export default class Server implements Party.Server {
   onConnect(conn: Party.Connection, _ctx: Party.ConnectionContext) {
     console.log(`Connected: ${conn.id}`);
 
-    this.broadcastState();
+    // Assign Role
+    let role = "spectator";
+    const existingPlayers = Object.values(this.playerConnections);
+    
+    if (!existingPlayers.includes("p1")) {
+        role = "p1";
+        this.gameState.players.push("p1");
+    } else if (!existingPlayers.includes("p2")) {
+        role = "p2";
+        this.gameState.players.push("p2");
+    }
+
+    this.playerConnections[conn.id] = role;
+
+    // Deal Initial Hand if not already present
+    // Check if this player already has cards (reconnection logic)
+    const existingCards = this.gameState.entities.filter(e => e.owner === role && e.inHand);
+    if (existingCards.length === 0 && role !== "spectator") {
+        for (let i = 0; i < 5; i++) {
+            this.drawCard(role);
+        }
+    }
+
+    // Send Welcome Message with assigned ID
+    conn.send(JSON.stringify({
+        type: "welcome",
+        playerId: role,
+        state: this.gameState
+    }));
+
+    // Broadcast update so others see new player list if needed
+    if (role !== "spectator") {
+        this.broadcastState();
+    }
+  }
+
+  onDisconnect(conn: Party.Connection) {
+      const role = this.playerConnections[conn.id];
+      if (role && role !== "spectator") {
+          console.log(`Player ${role} disconnected`);
+          delete this.playerConnections[conn.id];
+          this.gameState.players = this.gameState.players.filter(p => p !== role);
+          this.broadcastState();
+      }
   }
 
   broadcastState() {

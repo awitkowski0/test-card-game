@@ -7,79 +7,61 @@ import { world } from "../logic/world";
 
 interface HandProps {
     playerId: string;
-    onPlayCard: (index: number, location: [number, number]) => void;
+    onPlayCard: (entityId: string, location: [number, number]) => void;
 }
 
 export const Hand: React.FC<HandProps> = ({ playerId, onPlayCard }) => {
   const groupRef = useRef<THREE.Group>(null);
-  const [hovered, setHovered] = useState<number | null>(null);
-  const [dragged, setDragged] = useState<number | null>(null);
+  const [hovered, setHovered] = useState<string | null>(null); // Use ID for hover
+  const [dragged, setDragged] = useState<string | null>(null); // Use ID for drag
   const { scene, camera, raycaster, pointer } = useThree();
   
   // Refs for smooth animation
-  const cardRefs = useRef<(THREE.Group | null)[]>([]);
+  const cardRefs = useRef<Record<string, THREE.Group | null>>({});
   const draggedCardRef = useRef<THREE.Group>(null);
 
   const [dropTarget, setDropTarget] = useState<[number, number] | null>(null);
 
-  // Get all entities that might affect our hand (owned by us)
-  const myEntities = useEntities(world.with("owner", "cardId"));
+  const myEntities = useEntities(world.with("inHand"));
 
-  // Derive cards in hand from entities
-  const availableCards = useMemo(() => {
-     const playedCardIds = new Set<string>();
-     for (const e of myEntities) {
-         if (e.owner === playerId && e.cardId && e.cardId.startsWith('card-')) {
-             // If it has onBoard, it's played.
-             if (e.onBoard) {
-                 playedCardIds.add(e.cardId);
-             }
-         }
-     }
-
-     const cardsInHand: number[] = [];
-     for (let i = 0; i < 5; i++) {
-         if (dragged === i) {
-             cardsInHand.push(i);
-         } else if (!playedCardIds.has(`card-${i}`)) {
-             cardsInHand.push(i);
-         }
-     }
-     return cardsInHand;
-  }, [myEntities, playerId, dragged]);
+  const cardsInHand = Array.from(myEntities)
+      .filter(e => e.owner === playerId)
+      .sort((a, b) => a.id.localeCompare(b.id));
 
   useFrame((_state, delta) => {
     if (!groupRef.current) return;
 
-    availableCards.forEach((originalIndex, i) => {
-      // If this is the one being dragged, we skip animating the HAND group for it.
-      if (originalIndex === dragged) return;
+    cardsInHand.forEach((entity, i) => {
+      if (entity.id === dragged) return;
 
-      const cardGroup = cardRefs.current[i]; // Note: using 'i' (display index), not originalIndex
+      const cardGroup = cardRefs.current[entity.id];
       if (!cardGroup) return;
 
       // Arc arrangement parameters
       const radius = 1.0;
-      const totalParams = availableCards.length;
-      const baseAngleStep = 0.1;
+      const totalParams = cardsInHand.length; // Dynamic length!
+      const baseAngleStep = 0.15; // Widen slightly
       const centerOffset = (totalParams - 1) / 2;
 
       const yOffset = -0.4;
-      let angle = (i - centerOffset) * baseAngleStep; // Logic based on position in FAN (i)
+      let angle = (i - centerOffset) * baseAngleStep; 
       let zOffset = 0;
       let scale = 1;
       let rotationOffset = 0;
 
       // Hover logic
+      const isHovered = entity.id === hovered;
       if (hovered !== null && dragged === null) {
-        if (i === hovered) {
+        if (isHovered) {
             zOffset = 0.1; // Move closer to camera
-            scale = 1.2;
+            scale = 1.25;
             rotationOffset = 0; // Straighten the card
         } else {
             // Push neighbors away
-            const dist = i - hovered;
-            const pushFactor = 0.05; // Push more
+            // We need the index of the hovered card to calculate distance
+            const hoveredIndex = cardsInHand.findIndex(e => e.id === hovered);
+            const dist = i - hoveredIndex;
+            const pushFactor = 0.05; 
             
             if (dist < 0) angle -= pushFactor / Math.abs(dist);
             if (dist > 0) angle += pushFactor / Math.abs(dist);
@@ -89,7 +71,7 @@ export const Hand: React.FC<HandProps> = ({ playerId, onPlayCard }) => {
       const targetX = Math.sin(angle) * radius;
       const targetZ = (Math.cos(angle) * radius) - radius + zOffset;
       
-      // Target transforms for the WHOLE card group (Visual + Hitbox)
+      // Target transforms
       const targetPos = new THREE.Vector3(targetX, yOffset, targetZ);
       const targetRot = new THREE.Euler(0, 0, -angle + rotationOffset);
       
@@ -102,7 +84,7 @@ export const Hand: React.FC<HandProps> = ({ playerId, onPlayCard }) => {
 
     if (dragged !== null && draggedCardRef.current) {
         raycaster.setFromCamera(pointer, camera);
-        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.1); // Plane at y=0.1
+        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.1);
         const target = new THREE.Vector3();
         const intersection = raycaster.ray.intersectPlane(plane, target);
         
@@ -113,7 +95,18 @@ export const Hand: React.FC<HandProps> = ({ playerId, onPlayCard }) => {
             const gridX = Math.round(intersection.x + 1.5);
             const gridY = Math.round(intersection.z + 1.5);
             
-            if (gridX >= 0 && gridX <= 3 && gridY >= 2 && gridY <= 3) {
+            // Check bounds based on player
+            let isValidPlacement = false;
+            
+            if (gridX >= 0 && gridX <= 3) {
+                if (playerId === "p1") {
+                    if (gridY >= 2 && gridY <= 3) isValidPlacement = true;
+                } else if (playerId === "p2") {
+                    if (gridY >= 0 && gridY <= 1) isValidPlacement = true;
+                }
+            }
+
+            if (isValidPlacement) {
                 // Only update if changed
                 if (!dropTarget || dropTarget[0] !== gridX || dropTarget[1] !== gridY) {
                     setDropTarget([gridX, gridY]);
@@ -125,12 +118,11 @@ export const Hand: React.FC<HandProps> = ({ playerId, onPlayCard }) => {
     }
   });
 
-  const handlePointerDown = React.useCallback((e: ThreeEvent<PointerEvent>, originalIndex: number) => {
+  const handlePointerDown = React.useCallback((e: ThreeEvent<PointerEvent>, entityId: string) => {
       e.stopPropagation();
       if (e.button === 0) { // Left click
-          setDragged(originalIndex);
-          setHovered(null); // Clear hover when dragging
-          // Reset cursor
+          setDragged(entityId);
+          setHovered(null); 
           document.body.style.cursor = 'grabbing';
       }
   }, []);
@@ -142,9 +134,7 @@ export const Hand: React.FC<HandProps> = ({ playerId, onPlayCard }) => {
                const [gridX, gridY] = dropTarget;
                console.log(`Valid drop at ${gridX}, ${gridY} for card ${dragged}`);
                
-               // Notify parent - this will update entities, triggering availableCards re-calc
                onPlayCard(dragged, [gridX, gridY]);
-
           } else {
                console.log("Invalid drop");
           }
@@ -155,43 +145,50 @@ export const Hand: React.FC<HandProps> = ({ playerId, onPlayCard }) => {
       }
   }, [dragged, dropTarget, onPlayCard]);
 
-  // Global pointer up listener to catch releases anywhere
+  // Global pointer up listener
   React.useEffect(() => {
       window.addEventListener('pointerup', handlePointerUp);
       return () => window.removeEventListener('pointerup', handlePointerUp);
   }, [handlePointerUp]);
 
 
+  const opponentEntities = useEntities(world.with("owner", "cardId", "inHand"));
+  
+  const opponentCards = useMemo(() => {
+      return Array.from(opponentEntities).filter(e => e.owner !== playerId && !e.onBoard).sort((a, b) => a.id.localeCompare(b.id));
+  }, [opponentEntities, playerId]);
+
   return (
     <>
-        {/* Hand Container - Attached to Camera */}
+        {/* YOUR Hand Container - Attached to Camera */}
         <group ref={groupRef} position={[0, -0.3, -0.6]} rotation={[-0.2, 0, 0]}>
-        {availableCards.map((originalIndex, i) => {
+        {cardsInHand.map((entity, i) => {
             // If dragged, we hide the original in the hand
-            if (originalIndex === dragged) return null;
+            if (entity.id === dragged) return null;
 
             return (
                 <group 
-                    key={originalIndex} 
-                    ref={(el) => { cardRefs.current[i] = el; }}
+                    key={entity.id} 
+                    ref={(el) => { cardRefs.current[entity.id] = el; }}
                     onPointerEnter={(e) => {
                         e.stopPropagation();
-                        setHovered(i); // Hover based on display index for neighbor logic
+                        setHovered(entity.id); 
                         document.body.style.cursor = 'pointer';
                     }}
                     onPointerLeave={() => {
                         setHovered(null);
                         document.body.style.cursor = 'auto';
                     }}
-                    onPointerDown={(e) => handlePointerDown(e, originalIndex)}
+                    onPointerDown={(e) => handlePointerDown(e, entity.id)}
                 >
-                    {/* Visual Card */}
+                    {/* Visual Card Front */}
                     <mesh position={[0, 0.5, 0]}>
                         <boxGeometry args={[0.12, 0.18, 0.005]} />
-                        <meshStandardMaterial color={originalIndex === hovered ? "#ff4444" : (originalIndex % 2 === 0 ? "#cc3333" : "#3333cc")} />
+                        {/* Determine color based on index or type? For now index-like coloring */}
+                        <meshStandardMaterial color={entity.id === hovered ? "#ff4444" : (i % 2 === 0 ? "#cc3333" : "#3333cc")} />
                     </mesh>
 
-                    {/* Hitbox - Now child of the animated group, so it moves/scales with it */}
+                    {/* Hitbox */}
                     <mesh visible={false} position={[0, 0.5, 0]}>
                         <boxGeometry args={[0.15, 0.25, 0.1]} /> 
                     </mesh>
@@ -200,13 +197,35 @@ export const Hand: React.FC<HandProps> = ({ playerId, onPlayCard }) => {
         })}
         </group>
 
+        <group 
+            position={[0, 2, playerId === "p1" ? -3.5 : 3.5]} 
+            rotation={[playerId === "p1" ? 0.3 : -0.3, playerId === "p1" ? Math.PI : 0, 0]}
+        >
+             {opponentCards.map((entity, i) => {
+                 // Simple fan layout
+                 const xOffset = (i - (opponentCards.length - 1) / 2) * 0.15;
+                 
+                 return (
+                    <mesh key={entity.id} position={[xOffset, 0, 0]}>
+                        <boxGeometry args={[0.12, 0.18, 0.005]} />
+                        <meshStandardMaterial color="#555555" /> {/* Card Back Color */}
+                        {/* Add "Card Back" details? */}
+                        <mesh position={[0, 0, 0.003]}>
+                             <planeGeometry args={[0.1, 0.16]} />
+                             <meshStandardMaterial color="#333333" />
+                        </mesh>
+                    </mesh>
+                 );
+             })}
+        </group>
+
         {/* Dragged Card - Rendered in World Space via Portal */}
         {dragged !== null && createPortal(
             <>
                 <group ref={draggedCardRef}>
                     <mesh rotation={[-Math.PI/2, 0, 0]} position={[0, 0.05, 0]}>
                         <boxGeometry args={[0.6, 0.9, 0.02]} />
-                        <meshStandardMaterial color={dragged % 2 === 0 ? "#cc3333" : "#3333cc"} />
+                        <meshStandardMaterial color="#8888ff" />
                     </mesh>
                 </group>
                 

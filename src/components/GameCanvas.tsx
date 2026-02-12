@@ -7,20 +7,29 @@ import type { Entity } from "../logic/schema";
 import * as THREE from "three";
 import { world } from "../logic/world";
 
+import type { GameAction } from "../logic/actions";
+
 interface GameCanvasProps {
   entities: Entity[];
   playerId: string;
   onTileClick: (x: number, y: number) => void;
   onSelectCard: (id: string) => void;
+  onAction: (action: GameAction) => void;
 }
 
 interface CameraControllerProps {
   view: "sitting" | "standing";
+  playerId: string;
 }
 
-const CameraController = ({ view }: CameraControllerProps) => {
-  const sittingPos = new THREE.Vector3(0, 2, 3); // Closer and lower
-  const standingPos = new THREE.Vector3(0, 4, 0.25); // Closer top-down
+const CameraController = ({ view, playerId }: CameraControllerProps) => {
+  // P1 (Default): Z positive (4)
+  // P2 (Opponent): Z negative (-4)
+  const isP2 = playerId === "p2";
+  const zScale = isP2 ? -1 : 1;
+
+  const sittingPos = new THREE.Vector3(0, 2, 3 * zScale); // Closer and lower
+  const standingPos = new THREE.Vector3(0, 4, 0.25 * zScale); // Closer top-down
 
   useFrame((state) => {
     const targetPos = view === "standing" ? standingPos : sittingPos;
@@ -33,28 +42,46 @@ const CameraController = ({ view }: CameraControllerProps) => {
 };
 
 export const GameCanvas: React.FC<GameCanvasProps> = (props) => {
-  const { entities, playerId, onTileClick} = props;
+  const { entities, playerId, onTileClick, onAction } = props;
   const [view, setView] = useState<"sitting" | "standing">("sitting");
 
   // Sync server state to Miniplex World
   useEffect(() => {
-      world.clear();
-      
-      entities.forEach(entity => {
-          world.add(entity);
-      });
+    const staleIds = new Set(world.entities.map(e => e.id));
+
+    entities.forEach(serverEntity => {
+        staleIds.delete(serverEntity.id);
+        
+        const existing = world.entities.find(e => e.id === serverEntity.id);
+        if (existing) {
+            const currentKeys = Object.keys(existing) as (keyof Entity)[];
+            currentKeys.forEach(key => {
+                if (key === "id") return;
+                if (serverEntity[key] === undefined) {
+                    world.removeComponent(existing, key);
+                }
+            });
+            world.update(existing, serverEntity);
+        } else {
+            world.add(serverEntity);
+        }
+    });
+    staleIds.forEach(id => {
+        const e = world.entities.find(ent => ent.id === id);
+        if (e) world.remove(e);
+    });
   }, [entities]);
 
-  const handlePlayCard = React.useCallback((index: number, location: [number, number]) => {
+  const handlePlayCard = React.useCallback((entityId: string, location: [number, number]) => {
       const [x, y] = location;
-
-      world.add({
-          id: `local-entity-${Date.now()}`,
-          owner: playerId,
-          onBoard: { x, y },
-          cardId: `card-${index}`
+      
+      onAction({
+          type: "PLAY_CARD",
+          cardInstanceId: entityId, 
+          x,
+          y
       });
-  }, [playerId]);
+  }, [onAction]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -74,7 +101,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = (props) => {
             onPlayCard={handlePlayCard} 
           />
         </PerspectiveCamera>
-        <CameraController view={view} />
+        <CameraController view={view} playerId={playerId} />
         
         <ambientLight intensity={0.5} />
         <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow />
