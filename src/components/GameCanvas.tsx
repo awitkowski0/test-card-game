@@ -12,21 +12,16 @@ interface GameCanvasProps {
   onSelectCard: (id: string) => void;
 }
 
-const CameraController = () => {
-  const [view, setView] = useState<"sitting" | "standing">("sitting");
-  
+import { Hand } from "./Hand";
+
+interface CameraControllerProps {
+  view: "sitting" | "standing";
+}
+
+const CameraController = ({ view }: CameraControllerProps) => {
   // Target positions
   const sittingPos = new THREE.Vector3(0, 2, 3); // Closer and lower
   const standingPos = new THREE.Vector3(0, 4, 0.25); // Closer top-down
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() === "w") setView("standing");
-      if (e.key.toLowerCase() === "s") setView("sitting");
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
 
   useFrame((state) => {
     const targetPos = view === "standing" ? standingPos : sittingPos;
@@ -39,13 +34,25 @@ const CameraController = () => {
 };
 
 export const GameCanvas: React.FC<GameCanvasProps> = (props) => {
-  const { entities, playerId, onTileClick } = props;
+  const { entities, playerId, onTileClick} = props;
+  const [view, setView] = useState<"sitting" | "standing">("sitting");
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === "w") setView("standing");
+      if (e.key.toLowerCase() === "s") setView("sitting");
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   return (
     <div className="w-full h-screen bg-neutral-900">
       <Canvas shadows>
-        <PerspectiveCamera makeDefault position={[0, 3, 4]} fov={75} />
-        <CameraController />
+        <PerspectiveCamera makeDefault position={[0, 3, 4]} fov={65}>
+            {view === "sitting" && <Hand />}
+        </PerspectiveCamera>
+        <CameraController view={view} />
         
         <ambientLight intensity={0.5} />
         <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow />
