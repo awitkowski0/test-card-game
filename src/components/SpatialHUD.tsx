@@ -1,6 +1,5 @@
 import React from "react";
 import { Text, Float } from "@react-three/drei";
-import * as THREE from "three";
 
 interface SpatialHUDProps {
   turn: number;
@@ -27,7 +26,7 @@ export const SpatialHUD: React.FC<SpatialHUDProps> = ({ turn, activePlayer, play
 
   return (
     <group position={[0, 0, depth]}>
-      {/* 1. Status Terminal (Top Center) */}
+      {/* Top Center, this needs to be toggleable better though*/}
       <Float speed={1.5} rotationIntensity={0.05} floatIntensity={0.2}>
         <group position={[0, 0.7, 0]} scale={0.4}>
           {/* Subtle Glass Panel */}
@@ -68,13 +67,11 @@ export const SpatialHUD: React.FC<SpatialHUDProps> = ({ turn, activePlayer, play
         </group>
       </Float>
 
-      {/* 2. Energy Pips (Bottom Right) */}
       <group position={[0.8, -0.6, 0]} scale={0.4}>
           <Text
             position={[0, 0.3, 0]}
             fontSize={0.12}
             color="white"
-            opacity={0.4}
             anchorX="center"
           >
             ENERGY
@@ -92,8 +89,6 @@ export const SpatialHUD: React.FC<SpatialHUDProps> = ({ turn, activePlayer, play
             </group>
           ))}
       </group>
-
-      {/* 3. View Dashboard (Bottom Left) */}
       <group position={[-0.8, -0.6, 0]} scale={0.4}>
           <Text
             position={[0, 0.25, 0]}
@@ -112,7 +107,6 @@ export const SpatialHUD: React.FC<SpatialHUDProps> = ({ turn, activePlayer, play
                   <Text
                     fontSize={0.08}
                     color={ctrl.active ? "#60a5fa" : "#ffffff"}
-                    opacity={ctrl.active ? 1 : 0.4}
                     anchorX="left"
                   >
                     [{ctrl.key}] {ctrl.desc}
@@ -121,7 +115,7 @@ export const SpatialHUD: React.FC<SpatialHUDProps> = ({ turn, activePlayer, play
           ))}
       </group>
 
-      {/* 4. Initiate Attack Button (Center Bottom) */}
+      {/* Initiate Attack Button (Center Bottom) */}
       <group 
         position={[0, -0.6, 0.2]} 
         onClick={(e) => {
@@ -149,7 +143,6 @@ export const SpatialHUD: React.FC<SpatialHUDProps> = ({ turn, activePlayer, play
                     position={[0, -0.15, 0]}
                     fontSize={0.12}
                     color="white"
-                    opacity={isMyTurn ? 0.8 : 0.1}
                     anchorX="center"
                 >
                     {isMyTurn ? "INITIATE ATTACK" : "STANDBY"}

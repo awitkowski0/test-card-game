@@ -1,7 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import usePartySocket from "partysocket/react";
 import { GameCanvas } from "./components/GameCanvas";
-import { CreativeHUD } from "./components/HUD";
 import type { Entity } from "./logic/schema";
 import type { GameAction } from "./logic/actions";
 
@@ -17,6 +16,7 @@ function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [playerId, setPlayerId] = useState<string>("");
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  // TODO: We'll need to make some sort of lobby system / 1v1 system for this instead of just hard coding local host
   const PARTY_HOST = "127.0.0.1:1999";
 
   const socket = usePartySocket({

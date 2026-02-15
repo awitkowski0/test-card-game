@@ -1,5 +1,5 @@
 import React from "react";
-import { useRef, useState, useMemo } from "react";
+import { useRef, useState } from "react";
 import {useFrame, useThree, createPortal, type ThreeEvent} from "@react-three/fiber";
 import * as THREE from "three";
 import { useEntities } from "miniplex-react";
@@ -29,7 +29,6 @@ export const Card: React.FC<{
     // Load multiple textures: right, left, top, bottom, front, back
     const texKeys = ["right", "left", "top", "bottom", "front", "back"] as const;
     const textures = texKeys.map(key => 
-        // @ts-ignore
         useTexture(entity?.textures?.[key] || `https://placehold.co/400x600?text=${key.toUpperCase()}`)
     );
     
@@ -238,12 +237,6 @@ export const Hand: React.FC<HandProps> = ({ playerId, onPlayCard }) => {
       window.addEventListener('pointerup', handlePointerUp);
       return () => window.removeEventListener('pointerup', handlePointerUp);
   }, [handlePointerUp]);
-
-
-  const opponentCards = useMemo(() => {
-      // Logic removed - moving to Board.tsx
-      return [];
-  }, []);
 
   return (
     <>

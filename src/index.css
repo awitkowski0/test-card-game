@@ -25,6 +25,7 @@ body {
 
 canvas {
   display: block;
+  /* 60rem is basically full-screen it seems for the canvas */
   width: 60rem;
   height: 60rem
 }

@@ -40,9 +40,8 @@ const CameraController = ({ view, playerId }: CameraControllerProps) => {
     const isGrave = view === "graveyard";
     const isLeft = view === "left";
     const basePos = view === "standing" ? standingPos : sittingPos;
-    
-    let targetPos = basePos.clone();
-    let targetLookAt = new THREE.Vector3(0, 0, 0);
+    const targetPos = basePos.clone();
+    const targetLookAt = new THREE.Vector3(0, 0, 0);
 
     if (isDeck) {
         if (view === "standing") {

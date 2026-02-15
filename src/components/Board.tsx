@@ -7,7 +7,7 @@ import { Card } from "./Hand";
 interface BoardProps {
   playerId: string;
   onTileClick?: (x: number, y: number) => void;
-  onAction?: (action: any) => void;
+  onAction?: (action: never) => void;
 }
 
 const CardMesh: React.FC<{ entity: any; playerId: string; onAction?: (action: any) => void }> = ({ entity, playerId, onAction }) => {
@@ -18,7 +18,7 @@ const CardMesh: React.FC<{ entity: any; playerId: string; onAction?: (action: an
     // Load multiple textures: front, back, left, right, top, bottom
     // Order for MeshStandardMaterial array: [right, left, top, bottom, front, back]
     const texKeys = ["right", "left", "top", "bottom", "front", "back"] as const;
-    const textures = texKeys.map(key => 
+    const textures = texKeys.map(key =>
         useTexture(entity.textures?.[key] || `https://placehold.co/400x600?text=${key.toUpperCase()}`)
     );
 
