@@ -11,6 +11,9 @@ node_modules
 dist
 dist-ssr
 *.local
+# Partykit build files
+.partykit
+/party/node_modules
 
 # Editor directories and files
 .vscode/*
