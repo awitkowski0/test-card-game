@@ -4,8 +4,10 @@ export type Entity = {
   // -- Ownership & Identity --
   owner?: string; // Player ID (e.g. "p1", "p2")
   cardId?: string; // Reference to the static card ID (e.g. "c_fire_dragon")
+  name?: string;
+  description?: string;
   
-  // -- Position --
+  // ... Position ...
   // zone: where is it?
   inDeck?: boolean;
   inHand?: boolean;
@@ -14,22 +16,40 @@ export type Entity = {
 
   // -- Stats (Mutable) --
   health?: number;
+  maxHealth?: number;
   attack?: number;
   cost?: number;
-  actions?: number; // Actions remaining this turn
-  maxActions?: number;
+  actions?: number; // current actions remaining
+  maxActions?: number; // max actions per turn
 
   // -- Visuals --
-  position?: [number, number, number]; // 3D world position for smooth lerping
+  size?: [number, number, number]; // [width, height, depth]
+  textureUrl?: string; // URL for the card/entity texture
+  textures?: {
+    front: string;
+    back: string;
+    left: string;
+    right: string;
+    top: string;
+    bottom: string;
+  };
   targetPosition?: [number, number, number]; // Where it should go
-
-  // -- Tags --
-  taunt?: boolean;
-  flying?: boolean;
+  
+  // -- State --
+  locked?: boolean; // If true, the card cannot be picked back up
   
   // -- Player Specific --
   isPlayer?: boolean; // Tag for player entities
   isCharacter?: boolean; // Tag for character entities
-  mana?: number;
-  maxMana?: number;
+  isDeck?: boolean; // Tag for deck entities
+  isGraveyard?: boolean; // Tag for graveyard entities
+  isHero?: boolean; // Tag for hero entities
+  
+  // -- Rules (Mutable) --
+  validPlacement?: {
+      minX: number;
+      maxX: number;
+      minY: number;
+      maxY: number;
+  };
 };

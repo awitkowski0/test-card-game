@@ -3,12 +3,100 @@ import { useRef, useState, useMemo } from "react";
 import {useFrame, useThree, createPortal, type ThreeEvent} from "@react-three/fiber";
 import * as THREE from "three";
 import { useEntities } from "miniplex-react";
+import { useTexture, Text } from "@react-three/drei";
 import { world } from "../logic/world";
 
 interface HandProps {
     playerId: string;
     onPlayCard: (entityId: string, location: [number, number]) => void;
 }
+
+export const Card: React.FC<{ 
+    entity: any; 
+    i: number; 
+    hovered: boolean; 
+    onPointerDown: (e: ThreeEvent<PointerEvent>) => void; 
+    onPointerEnter: (e: ThreeEvent<PointerEvent>) => void; 
+    onPointerLeave: () => void; 
+    isOpponent?: boolean; 
+    isDragged?: boolean 
+}> = ({ entity, i, hovered, onPointerDown, onPointerEnter, onPointerLeave, isOpponent, isDragged }) => {
+    const color = hovered ? "#ffffff" : (isOpponent ? "#777" : "#eee");
+    
+    // UI cards are small, World cards (dragged) are standard board size
+    const size = isDragged ? [0.6, 0.8, 0.01] : [0.12, 0.18, 0.005];
+
+    // Load multiple textures: right, left, top, bottom, front, back
+    const texKeys = ["right", "left", "top", "bottom", "front", "back"] as const;
+    const textures = texKeys.map(key => 
+        // @ts-ignore
+        useTexture(entity?.textures?.[key] || `https://placehold.co/400x600?text=${key.toUpperCase()}`)
+    );
+    
+    return (
+        <group 
+            onPointerEnter={onPointerEnter}
+            onPointerLeave={onPointerLeave}
+            onPointerDown={onPointerDown}
+            rotation={isDragged ? [-Math.PI/2, 0, 0] : (isOpponent ? [0, Math.PI, 0] : [0, 0, 0])}
+        >
+            <mesh position={[0, isDragged ? 0.01 : 0.5, 0]}>
+                <boxGeometry args={[size[0], size[1], size[2]]} />
+                {textures.map((tex, idx) => (
+                    <meshStandardMaterial key={idx} attach={`material-${idx}`} map={tex} color={color} />
+                ))}
+            </mesh>
+
+            {!isOpponent && (
+                <group position={[0, 0.5, 0.01]}>
+                    {/* Stats Overlay for Hand/Dragged cards */}
+                    <Text 
+                        position={[0, size[1]/2 - 0.02, 0.001]} 
+                        fontSize={size[1] * 0.1} 
+                        color="white" 
+                        anchorX="center" 
+                        anchorY="middle"
+                    >
+                        {entity?.name || "Card"}
+                    </Text>
+                    <Text 
+                        position={[-size[0]/2 + 0.02, size[1]/2 - 0.02, 0.001]} 
+                        fontSize={size[1] * 0.15} 
+                        color="yellow" 
+                        anchorX="left" 
+                        anchorY="top"
+                    >
+                        {entity?.cost ?? ""}
+                    </Text>
+                    <Text 
+                        position={[-size[0]/2 + 0.02, -size[1]/2 + 0.02, 0.001]} 
+                        fontSize={size[1] * 0.15} 
+                        color="red" 
+                        anchorX="left" 
+                        anchorY="bottom"
+                    >
+                        {entity?.attack ?? ""}
+                    </Text>
+                    <Text 
+                        position={[size[0]/2 - 0.02, -size[1]/2 + 0.02, 0.001]} 
+                        fontSize={size[1] * 0.15} 
+                        color="green" 
+                        anchorX="right" 
+                        anchorY="bottom"
+                    >
+                        {entity?.health ?? ""}
+                    </Text>
+                </group>
+            )}
+
+            {!isDragged && (
+                <mesh visible={false} position={[0, 0.5, 0]}>
+                    <boxGeometry args={[0.15, 0.25, 0.1]} /> 
+                </mesh>
+            )}
+        </group>
+    );
+};
 
 export const Hand: React.FC<HandProps> = ({ playerId, onPlayCard }) => {
   const groupRef = useRef<THREE.Group>(null);
@@ -152,11 +240,10 @@ export const Hand: React.FC<HandProps> = ({ playerId, onPlayCard }) => {
   }, [handlePointerUp]);
 
 
-  const opponentEntities = useEntities(world.with("owner", "cardId", "inHand"));
-  
   const opponentCards = useMemo(() => {
-      return Array.from(opponentEntities).filter(e => e.owner !== playerId && !e.onBoard).sort((a, b) => a.id.localeCompare(b.id));
-  }, [opponentEntities, playerId]);
+      // Logic removed - moving to Board.tsx
+      return [];
+  }, []);
 
   return (
     <>
@@ -167,72 +254,49 @@ export const Hand: React.FC<HandProps> = ({ playerId, onPlayCard }) => {
             if (entity.id === dragged) return null;
 
             return (
-                <group 
-                    key={entity.id} 
+                <group
+                    key={entity.id}
                     ref={(el) => { cardRefs.current[entity.id] = el; }}
-                    onPointerEnter={(e) => {
-                        e.stopPropagation();
-                        setHovered(entity.id); 
-                        document.body.style.cursor = 'pointer';
-                    }}
-                    onPointerLeave={() => {
-                        setHovered(null);
-                        document.body.style.cursor = 'auto';
-                    }}
-                    onPointerDown={(e) => handlePointerDown(e, entity.id)}
                 >
-                    {/* Visual Card Front */}
-                    <mesh position={[0, 0.5, 0]}>
-                        <boxGeometry args={[0.12, 0.18, 0.005]} />
-                        {/* Determine color based on index or type? For now index-like coloring */}
-                        <meshStandardMaterial color={entity.id === hovered ? "#ff4444" : (i % 2 === 0 ? "#cc3333" : "#3333cc")} />
-                    </mesh>
-
-                    {/* Hitbox */}
-                    <mesh visible={false} position={[0, 0.5, 0]}>
-                        <boxGeometry args={[0.15, 0.25, 0.1]} /> 
-                    </mesh>
+                    <Card
+                        entity={entity}
+                        i={i}
+                        hovered={hovered === entity.id}
+                        onPointerEnter={(e) => {
+                            e.stopPropagation();
+                            setHovered(entity.id);
+                            document.body.style.cursor = 'pointer';
+                        }}
+                        onPointerLeave={() => {
+                            setHovered(null);
+                            document.body.style.cursor = 'auto';
+                        }}
+                        onPointerDown={(e) => handlePointerDown(e, entity.id)}
+                    />
                 </group>
             );
         })}
-        </group>
-
-        <group 
-            position={[0, 2, playerId === "p1" ? -3.5 : 3.5]} 
-            rotation={[playerId === "p1" ? 0.3 : -0.3, playerId === "p1" ? Math.PI : 0, 0]}
-        >
-             {opponentCards.map((entity, i) => {
-                 // Simple fan layout
-                 const xOffset = (i - (opponentCards.length - 1) / 2) * 0.15;
-                 
-                 return (
-                    <mesh key={entity.id} position={[xOffset, 0, 0]}>
-                        <boxGeometry args={[0.12, 0.18, 0.005]} />
-                        <meshStandardMaterial color="#555555" /> {/* Card Back Color */}
-                        {/* Add "Card Back" details? */}
-                        <mesh position={[0, 0, 0.003]}>
-                             <planeGeometry args={[0.1, 0.16]} />
-                             <meshStandardMaterial color="#333333" />
-                        </mesh>
-                    </mesh>
-                 );
-             })}
         </group>
 
         {/* Dragged Card - Rendered in World Space via Portal */}
         {dragged !== null && createPortal(
             <>
                 <group ref={draggedCardRef}>
-                    <mesh rotation={[-Math.PI/2, 0, 0]} position={[0, 0.05, 0]}>
-                        <boxGeometry args={[0.6, 0.9, 0.02]} />
-                        <meshStandardMaterial color="#8888ff" />
-                    </mesh>
+                    <Card
+                        entity={cardsInHand.find(e => e.id === dragged)} 
+                        i={0}
+                        hovered={true}
+                        isDragged={true} // Indicate it's the dragged card
+                        onPointerDown={() => {}}
+                        onPointerEnter={() => {}}
+                        onPointerLeave={() => {}}
+                    />
                 </group>
-                
+
                 {/* Drop Highlight on Board */}
                 {dropTarget && (
-                    <mesh 
-                        rotation={[-Math.PI / 2, 0, 0]} 
+                    <mesh
+                        rotation={[-Math.PI / 2, 0, 0]}
                         position={[dropTarget[0] - 1.5, 0.02, dropTarget[1] - 1.5]}
                     >
                         <planeGeometry args={[0.9, 0.9]} />
