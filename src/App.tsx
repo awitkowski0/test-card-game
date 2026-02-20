@@ -40,9 +40,9 @@ function App() {
   };
 
   // Main interaction handler
-  const handleTileClick = (x: number, y: number) => {
+  const handleTileClick = (slot: number) => {
     if (gameState?.activePlayer === playerId && selectedCardId) {
-        handleAction({ type: "PLAY_CARD", cardInstanceId: selectedCardId, x, y });
+        handleAction({ type: "PLAY_CARD", cardInstanceId: selectedCardId, slot });
         setSelectedCardId(null);
     }
   };

@@ -1,9 +1,11 @@
+import type { GameEvent } from "./events";
+
 export type Entity = {
   id: string; // Unique ID for the entity instance
   
   // -- Ownership & Identity --
   owner?: string; // Player ID (e.g. "p1", "p2")
-  cardId?: string; // Reference to the static card ID (e.g. "c_fire_dragon")
+  cardId?: string;
   name?: string;
   description?: string;
   
@@ -11,8 +13,15 @@ export type Entity = {
   // zone: where is it?
   inDeck?: boolean;
   inHand?: boolean;
-  onBoard?: { x: number; y: number }; // 0-3, 0-3
+  onBoard?: { slot: number; }; // 1-8 for circular lane setup
   inGraveyard?: boolean;
+
+  // -- Mechanics --
+  landscape?: string; // "Cornfield", "Blue Plains", "Rainbow", etc.
+  cardType?: string; // "Creature", "Building", "Spell", "Hero", etc.
+  state?: 'Live' | 'Potential'; // for retracting actions
+  flooped?: boolean; // Tapped state
+  canFloop?: boolean; // Does it have a floop action
 
   // -- Stats (Mutable) --
   health?: number;
@@ -28,10 +37,10 @@ export type Entity = {
   textures?: {
     front: string;
     back: string;
-    left: string;
-    right: string;
-    top: string;
-    bottom: string;
+    left?: string;
+    right?: string;
+    top?: string;
+    bottom?: string;
   };
   targetPosition?: [number, number, number]; // Where it should go
   
@@ -52,4 +61,7 @@ export type Entity = {
       minY: number;
       maxY: number;
   };
+
+  // -- Event Queue --
+  eventQueue?: GameEvent[];
 };
